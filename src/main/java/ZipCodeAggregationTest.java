@@ -5,11 +5,10 @@ import com.mongodb.client.model.Accumulators;
 import com.mongodb.client.model.Aggregates;
 import com.mongodb.client.model.Filters;
 import com.mongodb.client.model.Sorts;
-import com.sun.javadoc.Doc;
 import org.bson.Document;
 import org.bson.conversions.Bson;
+import com.mongodb.Block;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
@@ -19,6 +18,13 @@ import java.util.List;
 public class ZipCodeAggregationTest {
 
     public static void main(String[] args) {
+
+        Block<Document> printBlock = new Block<Document>() {
+            @Override
+            public void apply(final Document document) {
+                System.out.println(document.toJson());
+            }
+        };
 
         // to connect to a replica set, with auto-discovery of the primary, supply a seed list of members
         // http://mongodb.github.io/mongo-java-driver/3.0/driver/getting-started/quick-tour/
@@ -40,11 +46,7 @@ public class ZipCodeAggregationTest {
                         new Document("totalPop",
                                 new Document("$gte", 12018340))));
 
-        List<Document> results = collectionOfZips.aggregate(pipeline).into(new ArrayList<Document>());
-
-        for (Document document:results) {
-            System.out.println(document.toJson());
-        }
+        collectionOfZips.aggregate(pipeline).forEach(printBlock);
 
         // The second method to aggregate pipeline to use the various builder classes
         // Since Java Driver 3.1 added mongoDB builders for the aggregation framework
@@ -53,11 +55,7 @@ public class ZipCodeAggregationTest {
         List<Bson> pipelineWithBuilder = Arrays.asList(Aggregates.group("$state", Accumulators.sum("totalPop", "$pop")),
                 Aggregates.match(Filters.gte("totalPop", 12018340)));
 
-        List<Document> results1 = collectionOfZips.aggregate(pipelineWithBuilder).into(new ArrayList<Document>());
-
-        for (Document document:results1) {
-            System.out.println(document.toJson());
-        }
+        collectionOfZips.aggregate(pipelineWithBuilder).forEach(printBlock);
 
         // The third method to aggregate pipeline to use document parse for quickly creating pipelines
         // from shell syntax
@@ -70,11 +68,7 @@ public class ZipCodeAggregationTest {
                 Document.parse("{$group: { _id: \"$state\", totalPop: { $sum: \"$pop\"}}}"),
                 Document.parse("{$match: { totalPop: { $gte: 12018340}}}"));
 
-        List<Document> results2 = collectionOfZips.aggregate(pipelineWithShellSyntax).into(new ArrayList<Document>());
-
-        for (Document document:results2) {
-            System.out.println(document.toJson());
-        }
+        collectionOfZips.aggregate(pipelineWithShellSyntax).forEach(printBlock);
 
         System.out.println("\n" + "Examples:" + "\n");
         System.out.println("\t" + "1. to find the most frequent author of comments on your blog" +"\n");
@@ -94,12 +88,7 @@ public class ZipCodeAggregationTest {
                 Document.parse("{$sort: {num_comments:-1}}"),
                 Document.parse("{$limit: 5}"));*/
 
-        List<Document> resultForTheAuthorWithTheMostComment = collectionForPosts.aggregate(pipelineToFindTheMostFrequentAuthorOfComments)
-                                                                        .into(new ArrayList<Document>());
-
-        for (Document document: resultForTheAuthorWithTheMostComment) {
-            System.out.println(document.toJson());
-        }
+        collectionForPosts.aggregate(pipelineToFindTheMostFrequentAuthorOfComments).forEach(printBlock);
 
         MongoCollection<Document> collectionForSmallZips = db.getCollection("small_zips");
 
@@ -108,12 +97,8 @@ public class ZipCodeAggregationTest {
 
         List<Bson> pipelineToCalculateTheAveragePopulationOfCAAndNY = Arrays.asList();
 
-        List<Document> resulatForCalculatedTheAveragePopulationOfCAAndNY = collectionForSmallZips.aggregate(pipelineToCalculateTheAveragePopulationOfCAAndNY)
-                .into(new ArrayList<Document>());
+        collectionForSmallZips.aggregate(pipelineToCalculateTheAveragePopulationOfCAAndNY).forEach(printBlock);
 
-        for (Document document: resulatForCalculatedTheAveragePopulationOfCAAndNY) {
-            System.out.println(document.toJson());
-        }
     }
 }
 

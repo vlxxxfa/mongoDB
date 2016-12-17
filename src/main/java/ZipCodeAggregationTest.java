@@ -32,6 +32,9 @@ public class ZipCodeAggregationTest {
         MongoClient mongoClient = new MongoClient("localhost", 27017);
         MongoDatabase db = mongoClient.getDatabase("test");
         MongoCollection<Document> collectionOfZips = db.getCollection("zips");
+        MongoCollection<Document> collectionForPosts = db.getCollection("posts");
+        MongoCollection<Document> collectionForSmallZips = db.getCollection("small_zips");
+        MongoCollection<Document> collectionForGrades = db.getCollection("grades");
 
         // List<Document> results = collectionOfZips.find().into(new ArrayList<Document>());
 
@@ -70,11 +73,8 @@ public class ZipCodeAggregationTest {
 
         collectionOfZips.aggregate(pipelineWithShellSyntax).forEach(printBlock);
 
-        System.out.println("\n" + "Examples:" + "\n");
-        System.out.println("\t" + "1. to find the most frequent author of comments on your blog" +"\n");
-
-
-        MongoCollection<Document> collectionForPosts = db.getCollection("posts");
+        System.out.println("\n" + "Examples:");
+        System.out.println("\n" + "1. to find the most frequent author of comments on your blog" +"\n");
 
         List<Bson> pipelineToFindTheMostFrequentAuthorOfComments = Arrays.asList(
                 Aggregates.unwind("$comments"),
@@ -90,15 +90,44 @@ public class ZipCodeAggregationTest {
 
         collectionForPosts.aggregate(pipelineToFindTheMostFrequentAuthorOfComments).forEach(printBlock);
 
-        MongoCollection<Document> collectionForSmallZips = db.getCollection("small_zips");
 
-        System.out.println("\n" + "\t" + "2. to calculate the average population of cities in California (abbreviation CA)" +
+        System.out.println("\n" + "2. to calculate the average population of cities in California (abbreviation CA)" +
                 "and New York (NY) (taken together) with populations over 25,000" +"\n");
 
-        List<Bson> pipelineToCalculateTheAveragePopulationOfCAAndNY = Arrays.asList();
+        /*List<Bson> pipelineToCalculateTheAveragePopulationOfCAAndNY = Arrays.asList();
+
+        collectionForSmallZips.aggregate(pipelineToCalculateTheAveragePopulationOfCAAndNY).forEach(printBlock);
+        */
+
+        // The third method to aggregate pipeline
+        List<Document> pipelineToCalculateTheAveragePopulationOfCAAndNY = Arrays.asList(
+                Document.parse("{$match: {state: {$in: ['CA', 'NY']}}}"),
+                // group by state and city
+                Document.parse("{$group: { _id: {state: \"$state\", city: \"$city\"}, pop: {$sum: \"$pop\"}}}"),
+                // only look at cities over 25.000
+                Document.parse("{$match: {pop: {$gt: 25000}} }"),
+                // get the average population across those cities
+                Document.parse("{$group: { _id: null, pop: {$avg: \"$pop\"} } }"));
 
         collectionForSmallZips.aggregate(pipelineToCalculateTheAveragePopulationOfCAAndNY).forEach(printBlock);
 
+        System.out.println("\n" + "3. to calculate the class with the best average student performance" +"\n");
+
+        List<Document> pipelineForGrades = Arrays.asList(
+                // We use $unwind to deconstruct the scores array into separate documents.
+                Document.parse("{$unwind : \"$scores\" }"),
+                // We use $match to filter out documents that aren't quizzes, leaving us with homeworks and exams.
+                Document.parse("{$match : { \"scores.type\" : { $ne : \"quiz\" } } }"),
+                // We use $group to calculate the GPA for each student in the class.
+                Document.parse("{ $group : { _id : { student_id : \"$student_id\", class_id : \"$class_id\" }, avg : { $avg : \"$scores.score\" } } }"),
+                // We process this result with another $group to compute the class average.
+                Document.parse("{ $group : { _id : \"$_id.class_id\", avg : { $avg : \"$avg\" } } }"),
+                // We sort the results by highest average descending.
+                Document.parse("{ $sort : { \"avg\" : -1 } }"),
+                // Finally, we limit our results to classes with the top 5 averages.
+                Document.parse("{ $limit : 5 })"));
+
+        collectionForGrades.aggregate(pipelineForGrades).forEach(printBlock);
     }
 }
 

@@ -17,10 +17,10 @@ import java.util.List;
  */
 public class ZipCodeAggregationTest {
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws InterruptedException {
 
         Block<Document> printBlock = new Block<Document>() {
-            @Override
+
             public void apply(final Document document) {
                 System.out.println(document.toJson());
             }
@@ -32,9 +32,11 @@ public class ZipCodeAggregationTest {
         MongoClient mongoClient = new MongoClient("localhost", 27017);
         MongoDatabase db = mongoClient.getDatabase("test");
         MongoCollection<Document> collectionOfZips = db.getCollection("zips");
+        MongoCollection<Document> collectionForReplication = db.getCollection("replication");
         MongoCollection<Document> collectionForPosts = db.getCollection("posts");
         MongoCollection<Document> collectionForSmallZips = db.getCollection("small_zips");
         MongoCollection<Document> collectionForGrades = db.getCollection("grades");
+        MongoCollection<Document> collectionForZipsCodeDataSampleZip = db.getCollection("zips_code_data_sample_zip");
 
         // List<Document> results = collectionOfZips.find().into(new ArrayList<Document>());
 
@@ -90,7 +92,6 @@ public class ZipCodeAggregationTest {
 
         collectionForPosts.aggregate(pipelineToFindTheMostFrequentAuthorOfComments).forEach(printBlock);
 
-
         System.out.println("\n" + "2. to calculate the average population of cities in California (abbreviation CA)" +
                 "and New York (NY) (taken together) with populations over 25,000" +"\n");
 
@@ -128,6 +129,31 @@ public class ZipCodeAggregationTest {
                 Document.parse("{ $limit : 5 })"));
 
         collectionForGrades.aggregate(pipelineForGrades).forEach(printBlock);
+
+        System.out.println("\n" + "4. to calculate the number of people who live in a zip code in the US where the city starts with a digit" +"\n");
+
+        List<Document> pipelineForZipsCodeDataSampleZip = Arrays.asList(
+                // using substring operator to pull the first character out of the city so that you can compare it
+                Document.parse("{$project: { first_char: {$substr : [\"$city\",0,1]}," +
+                        "pop:1," +
+                        "city:\"$city\"," +
+                        "zip:\"$_id\"," +
+                        "state:1}}"),
+                Document.parse("{$match:{first_char:{$in:['0','1','2','3','4','5','6','7','8','9']}}}"),
+                Document.parse("{$group:{_id:null, population:{$sum:\"$pop\"}}}")
+        );
+
+        collectionForZipsCodeDataSampleZip.aggregate(pipelineForZipsCodeDataSampleZip).forEach(printBlock);
+
+        // how to connect to a replica set using the MongoDB Java driver
+
+        collectionForReplication.drop();
+
+        for (int i = 0; i < Integer.MAX_VALUE; i++) {
+            collectionForReplication.insertOne(new Document("_id", i));
+            System.out.println("Inserted document " + i);
+            Thread.sleep(500);
+        }
     }
 }
 
